@@ -1,0 +1,15 @@
+{
+  "name": "bilans-podatki",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Statyczny symulator UoP i JDG, IKZE oraz wspólnego PIT",
+  "scripts": {
+    "test": "node --test tests/engine.test.cjs",
+    "build": "node scripts/build.cjs",
+    "dev": "python3 -m http.server 4173 --bind 127.0.0.1",
+    "test:browser": "node tests/browser.cjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.0"
+  }
+}
