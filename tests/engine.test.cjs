@@ -199,3 +199,45 @@ test('Roczne netto w porównaniu uwzględnia wspólny próg; zaliczki nie zmieni
  const on=calc({spouseGross:0,jointPayroll:true})[0];
  assert.deepEqual(E.annualTakeHome(joint),E.annualTakeHome(on));
 });
+
+test('Zlecenie 9000 w innej firmie: zdrowotna 810, KUP 1800, zaliczka 864, wypłata 7326',()=>{
+ const r=calc({contractEnabled:true,contractGross:9000,contractEmployer:'other'})[0],z=r.contractRows[0];
+ assert.equal(z.social,0);assert.equal(z.health,810);assert.equal(z.kup,1800);assert.equal(z.pit,864);assert.equal(z.net,7326);assert.equal(z.employerCost,9000);
+ const before=calc()[0];assert.equal(r.base-before.base,86400);near(E.monthlyTakeHome(r).you-E.monthlyTakeHome(before).you,7326);
+ assert.equal(r.pit,E.scale(r.base,p));assert.ok(r.pit>before.pit+10368);
+ near(r.net,E.sum(r.rows,'net')+r.ownRefund);
+});
+test('Własny pracodawca: pełne składki zlecenia, 20% KUP także przy autorskim etacie',()=>{
+ const r=calc({contractEnabled:true,contractEmployer:'same'})[1],z=r.contractRows[0];
+ assert.equal(z.social,1233.9);assert.equal(z.health,698.95);assert.equal(z.kup,1553.22);assert.equal(z.pit,746);assert.equal(z.net,6321.15);assert.equal(z.employerCost,10843.2);assert.equal(z.author,0);
+ near(r.annual.pension,p.pensionCap*.0976,.03);near(r.annual.disability,p.pensionCap*.015,.03);
+ assert.equal(r.rows[11].pension,0);assert.equal(z.sickness,220.5);
+ near(r.annual.revenue,348000);
+});
+test('Zlecenie nie jest doliczane do JDG ani dochodów małżonka; wyłączenie i zero przywracają wynik',()=>{
+ const before=calc(),after=calc({contractEnabled:true});
+ for(let i=2;i<5;i++)assert.deepEqual(after[i],before[i]);
+ assert.deepEqual(after[0].spouseRows,before[0].spouseRows);
+ assert.deepEqual(calc({contractEnabled:false,contractGross:99999}),before);
+ assert.deepEqual(calc({contractEnabled:true,contractGross:0}),before);
+});
+test('Próg minimum etatu: społeczne zlecenia tylko w odpowiednich miesiącach; chorobowe dobrowolne',()=>{
+ const months=Array.from({length:12},(_,i)=>({gross:i===0?4805:4806,revenue:24000,cost:1500}));
+ const r=calc({contractEnabled:true,monthly:true,months})[0];
+ assert.equal(r.contractRows[0].social,1013.4);assert.equal(r.contractRows[0].sickness,0);assert.equal(r.contractRows[1].social,0);
+ const yes=calc({contractEnabled:true,monthly:true,months,contractSickness:true})[0];assert.equal(yes.contractRows[0].sickness,220.5);assert.equal(yes.contractRows[1].sickness,0);
+});
+test('Wspólny PIT i IKZE sumują etat oraz zlecenie; oświadczenie nie zmienia zaliczki zlecenia',()=>{
+ const options={contractEnabled:true,spouseGross:0,ikze:10000};const a=calc(options)[0],b=calc({...options,jointPayroll:true})[0];
+ near(a.jointTax,2*E.scale((a.base-10000)/2,p),1.01);
+ assert.equal(a.jointTax,b.jointTax);assert.deepEqual(a.contractRows,b.contractRows);assert.ok(E.monthlyTakeHome(b).you>E.monthlyTakeHome(a).you);
+ near(E.annualTakeHome(a).total,E.annualTakeHome(b).total);
+ const childOptions={gross:8000,spouseGross:0,childrenCount:1,childrenEligible:true};
+ assert.ok(calc(childOptions)[0].childDeduction>0);assert.equal(calc({...childOptions,contractEnabled:true})[0].childDeduction,0);
+});
+test('PPK własnego pracodawcy obejmuje zlecenie; obca firma nie powiela PPK etatu',()=>{
+ const opts={contractEnabled:true,ppkEmployee:2,ppkEmployer:1.5};
+ const same=calc({...opts,contractEmployer:'same'})[0],other=calc(opts)[0];
+ assert.equal(same.contractRows[0].ppk,180);assert.equal(same.contractRows[0].employerPpk,135);assert.equal(other.contractRows[0].ppk,0);
+ near(same.net,E.sum(same.rows,'net')+same.ownRefund);
+});

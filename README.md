@@ -93,3 +93,15 @@ npm run test:browser
 Testy obliczeń korzystają wyłącznie z Node.js. Testy interfejsu używają Playwright i zainstalowanego Google Chrome. Otwierają gotową wersję `dist/index.html` bez serwera, testują wersję desktop i mobilną, import / eksport, dane miesięczne, oba lata i brak zewnętrznych żądań. Zrzuty zapisują do `artifacts/`.
 
 Pliki: `engine.js` — czyste funkcje obliczeń i bazowe parametry; `app.js` — interfejs i zapis; `index.html` / `style.css` — widok; `tests/` — testy; `dist/` — gotowe pliki do publikacji.
+
+## Dodatkowe zlecenie przy UoP
+
+Włącz „Dolicz moje zlecenie do wariantów UoP”, wpisz brutto miesięczne (podpowiedź: 9000 zł) i wybierz własnego pracodawcę / pracę na jego rzecz albo inną firmę. Zlecenie jest wyłączone domyślnie, także przy wczytywaniu wcześniejszych scenariuszy. JDG nadal używa łącznego przychodu faktur: nie dolicza tej kwoty ponownie.
+
+Model obejmuje stałą wypłatę zlecenia przez 12 miesięcy. Przy innym zleceniodawcy i etacie co najmniej minimalnym nalicza tylko zdrowotną. Poniżej minimum nalicza społeczne, a chorobowe według wyboru. Przy własnym pracodawcy społeczne i chorobowe są obowiązkowe. W miesiącu przekroczenia wspólnego limitu emerytalno-rentowego pozostała podstawa jest dzielona proporcjonalnie; zakładamy wypłaty w tym samym miesiącu i prawidłową informację płatników o limicie. Wysokość miesięcznego etatu jest używana jako wynagrodzenie do oceny zbiegu; model nie obejmuje absencji ani szczególnych przypadków przeliczania do pełnego miesiąca.
+
+KUP zlecenia wynoszą 20% po składkach społecznych, bez autorskich KUP. Zaliczka jest pobierana według pierwszej stawki (12% bazowo) przez cały rok, PIT-2 pozostaje na etacie. Końcowy PIT sumuje dochody, uwzględnia wspólne rozliczenie, IKZE i ulgę na dzieci. Oświadczenie o wspólnym PIT zmienia wyłącznie zaliczki etatu. Średnie miesięczne i wykres zawierają faktyczne modelowe wypłaty obu umów; dopłata/zwrot pozostaje w rocznym rozliczeniu. Tabela miesięczna i CSV rozdzielają wypłaty etatu i zlecenia.
+
+PPK u własnego pracodawcy korzysta z ustawień etatu; u innej firmy zakładamy brak PPK i brak dobrowolnych emerytalno-rentowych. Model nie obejmuje studentów do 26 lat, PIT-0, małych umów opodatkowanych ryczałtowo do 200 zł, wniosku o wyższą zaliczkę ani zlecenia wykonywanego w ramach JDG. Założenia zlecenia dla 2027 kontynuują model 2026.
+
+Źródła: [MF – zlecenie](https://podatki.gov.pl/podatki-osobiste/pit/informacje-podstawowe/co-jest-opodatkowane/dochody-z-umowy-zlecenia-lub-o-dzielo), [Biznes.gov.pl – zbieg etatu i zlecenia](https://biznes.gov.pl/pl/portal/001785).

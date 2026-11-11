@@ -6,13 +6,20 @@ const positive = v => Math.max(0, v);
 const sum = (rows, key) => round(rows.reduce((a, r) => a + (r[key] || 0), 0));
 const base = { threshold:120000, threshold2:120000, rate1:12, rate2:32, rate3:32, free:30000, minimum:4806, socialBase:5652, pensionCap:282600, copyrightCap:120000, kup:250, kupAway:300, healthScale:9, healthLinear:4.9, healthEmployee:9, healthMinimum:432.54, lumpHealth1:498.35, lumpHealth2:830.58, lumpHealth3:1495.04, lumpThreshold1:60000, lumpThreshold2:300000, linearRate:19, linearHealthCap:14100, ikzeEmployee:11304, ikzeBusiness:16956, vatLimit:240000, pensionEmployee:9.76, pensionEmployer:9.76, disabilityEmployee:1.5, disabilityEmployer:6.5, sickness:2.45, accident:1.67, fund:2.45, fgsp:.1, solidarityThreshold:1000000, solidarityRate:4, childFirst:92.67, childThird:166.67, childFourth:225, childCoupleLimit:112000, childSingleLimit:56000 };
 const presets = {2026:{...base},2027:{...base,minimum:4950,socialBase:6019.8,pensionCap:300990,healthMinimum:445.5,ikzeEmployee:12039.6,ikzeBusiness:18059.4}};
-const defaults = {year:2026,gross:20000,revenue:24000,cost:1500,vat:23,costVat:23,vatDeduction:100,vatActive:true,copyright:80,kupAway:false,pit2:true,social:'full',sickness:true,customBase:3000,startMonths:6,spouseGross:6000,spouseCopyright:0,married:true,jointEligible:true,jointPayroll:false,jointPayrollFrom:1,childrenCount:0,childPeriods:Array.from({length:10},()=>({from:1,to:12})),childrenEligible:false,childDisability:false,childFullYearMarriage:true,childSingleParent:false,childShare:100,childOtherIncome:0,childSpouseOtherIncome:0,allocation:'saving',savingShare:50,ikze:0,spouseIkze:0,ppkEmployee:0,ppkEmployer:0,monthly:false,months:Array.from({length:12},()=>({gross:20000,revenue:24000,cost:1500}))};
+const defaults = {contractEnabled:false,contractGross:9000,contractEmployer:'other',contractSickness:false,year:2026,gross:20000,revenue:24000,cost:1500,vat:23,costVat:23,vatDeduction:100,vatActive:true,copyright:80,kupAway:false,pit2:true,social:'full',sickness:true,customBase:3000,startMonths:6,spouseGross:6000,spouseCopyright:0,married:true,jointEligible:true,jointPayroll:false,jointPayrollFrom:1,childrenCount:0,childPeriods:Array.from({length:10},()=>({from:1,to:12})),childrenEligible:false,childDisability:false,childFullYearMarriage:true,childSingleParent:false,childShare:100,childOtherIncome:0,childSpouseOtherIncome:0,allocation:'saving',savingShare:50,ikze:0,spouseIkze:0,ppkEmployee:0,ppkEmployer:0,monthly:false,months:Array.from({length:12},()=>({gross:20000,revenue:24000,cost:1500}))};
 function rawScale(income,p) { const x=positive(income); return Math.min(x,p.threshold)*p.rate1/100 + Math.min(positive(x-p.threshold),positive(p.threshold2-p.threshold))*p.rate2/100 + positive(x-Math.max(p.threshold,p.threshold2))*p.rate3/100; }
 function scale(income,p) {return Math.round(positive(rawScale(Math.round(positive(income)),p)-p.free*p.rate1/100));}
-function payroll(amounts,share,s,p) {
+function payroll(amounts,share,s,p,withContract=false) {
  let pensionUsed=0,authorUsed=0,incomeUsed=0;
+ const contractRows=[];
  const rows=amounts.map((gross,i)=>{
-  const capped=Math.min(gross,positive(p.pensionCap-pensionUsed)); pensionUsed+=gross;
+  const zg=withContract&&s.contractEnabled?s.contractGross:0;
+  const same=s.contractEmployer==='same',insured=zg>0&&(same||gross<p.minimum);
+  const insuredGross=gross+(insured?zg:0),remaining=positive(p.pensionCap-pensionUsed);
+  // In the cap month allocate the common remaining base proportionally.
+  const totalCapped=Math.min(insuredGross,remaining);
+  const capped=insuredGross?round(totalCapped*gross/insuredGross):0;
+  const zcapped=round(totalCapped-capped);pensionUsed+=insuredGross;
   const pension=round(capped*p.pensionEmployee/100),disability=round(capped*p.disabilityEmployee/100),sickness=round(gross*p.sickness/100),social=round(pension+disability+sickness);
   const health=round((gross-social)*p.healthEmployee/100);
   const author=round(Math.min(positive(p.copyrightCap-authorUsed),(gross-social)*share/100*.5)); authorUsed+=author;
@@ -21,11 +28,22 @@ function payroll(amounts,share,s,p) {
   const income=positive(round(gross+employerPpk-social-author-ordinary));
   const incremental=rawScale(incomeUsed+Math.round(income),p)-rawScale(incomeUsed,p);
   const pit=Math.round(positive(incremental-(s.pit2?p.free*p.rate1/100/12:0))); incomeUsed+=Math.round(income);
-  const employerPension=round(capped*p.pensionEmployer/100),employerDisability=round(capped*p.disabilityEmployer/100),accident=round(gross*p.accident/100),fund= gross>=p.minimum?round(gross*p.fund/100):0,fgsp=round(gross*p.fgsp/100);
+  const employerPension=round(capped*p.pensionEmployer/100),employerDisability=round(capped*p.disabilityEmployer/100),accident=round(gross*p.accident/100),fund= gross+(same?zg:0)>=p.minimum?round(gross*p.fund/100):0,fgsp=round(gross*p.fgsp/100);
   const employerSocial=round(employerPension+employerDisability+accident+fund+fgsp);
+  const zpension=round(zcapped*p.pensionEmployee/100),zdisability=round(zcapped*p.disabilityEmployee/100);
+  const zsickness=insured&&(same||s.contractSickness)?round((same?zg:Math.min(zg,p.pensionCap/12))*p.sickness/100):0;
+  const zsocial=round(zpension+zdisability+zsickness),zhealth=round((zg-zsocial)*p.healthEmployee/100);
+  const zppk=same?round(zg*s.ppkEmployee/100):0,zEmployerPpk=same?round(zg*s.ppkEmployer/100):0;
+  const zkup=round((zg+zEmployerPpk-zsocial)*.2),zincome=round(zg+zEmployerPpk-zsocial-zkup);
+  // Article 41: separate first-rate advance; PIT-2 stays on the employment contract.
+  const zpit=Math.round(Math.round(zincome)*p.rate1/100);
+  const zePension=round(zcapped*p.pensionEmployer/100),zeDisability=round(zcapped*p.disabilityEmployer/100);
+  const zaccident=insured?round(zg*p.accident/100):0,zfund=insured&&gross+zg>=p.minimum?round(zg*p.fund/100):0,zfgsp=insured?round(zg*p.fgsp/100):0;
+  const zeSocial=round(zePension+zeDisability+zaccident+zfund+zfgsp);
+  contractRows.push({month:i,gross:zg,revenue:zg,cost:0,pension:zpension,disability:zdisability,sickness:zsickness,social:zsocial,fund:0,health:zhealth,pit:zpit,author:0,kup:zkup,income:zincome,ppk:zppk,employerPpk:zEmployerPpk,employerPension:zePension,employerDisability:zeDisability,accident:zaccident,employerFund:zfund,fgsp:zfgsp,employerSocial:zeSocial,employerCost:round(zg+zeSocial+zEmployerPpk),net:round(zg-zsocial-zhealth-zpit-zppk),vatOut:0,vatIn:0,vat:0,invoice:zg});
   return {month:i,gross,revenue:gross,cost:0,pension,disability,sickness,social,fund:0,health,pit,author,kup:round(author+ordinary),income,ppk,employerPpk,employerPension,employerDisability,accident,employerFund:fund,fgsp,employerSocial,employerCost:round(gross+employerSocial+employerPpk),net:round(gross-social-health-pit-ppk),vatOut:0,vatIn:0,vat:0,invoice:gross};
  });
- return {rows,base:sum(rows,'income')};
+ return {rows,contractRows,base:round(sum(rows,'income')+sum(contractRows,'income'))};
 }
 function business(type,s,p) {
  let cumIncome=0,cumTax=0,cumHealth=0,pensionUsed=0;
@@ -123,7 +141,7 @@ function calculate(s,p) {
  const spouseSolidarity=Math.round(positive(spouse.base-p.solidarityThreshold)*p.solidarityRate/100);
  return ['uop','author','scale','linear','lump'].map(id=>{
   const employee=id==='uop'||id==='author',ownScale=employee||id==='scale';
-  const result=employee?payroll(s.monthly?s.months.map(m=>m.gross):Array(12).fill(s.gross),id==='author'?s.copyright:0,s,p):business(id,s,p);
+  const result=employee?payroll(s.monthly?s.months.map(m=>m.gross):Array(12).fill(s.gross),id==='author'?s.copyright:0,s,p,true):business(id,s,p);
   const rows=result.rows,b=result.base,contribution=Math.min(s.ikze,employee?p.ikzeEmployee:p.ikzeBusiness),deduction=Math.min(contribution,b);
   const jointAllowed=s.married&&s.jointEligible&&ownScale;
   // Article 32(3): declared forecast, flat first-rate advances; NOT a doubled payroll threshold.
@@ -135,6 +153,9 @@ function calculate(s,p) {
    row.pit=Math.round(positive(Math.round(row.income)*p.rate1/100-reduction));
    row.net=round(row.revenue-row.social-row.health-row.pit-row.ppk);
   }
+  // Apply employment declarations before adding the independently withheld contract advance.
+  const employmentRows=employee?rows.map(r=>({...r})):[];
+  if(employee)rows.forEach((row,i)=>{for(const key of Object.keys(row))if(key!=='month')row[key]=round(row[key]+(result.contractRows[i][key]||0));});
   const taxFn=x=>ownScale?scaleRaw(x):Math.round(positive(x))*(id==='linear'?p.linearRate:s.lumpRate)/100;
   const jointRaw=(own,wife)=>2*positive(rawScale(Math.round((positive(own)+positive(wife))/2),p)-p.free*p.rate1/100);
   const ent=childEntitlement(s,p,id==='lump'?0:b,spouse.base);
@@ -148,7 +169,7 @@ function calculate(s,p) {
   const net=round(ownBeforeTax-pit-solidarity+settlement.ownExtra);
   const spouseNet=round(sum(spouse.rows,'revenue')-sum(spouse.rows,'social')-sum(spouse.rows,'health')-spouseTax-spouseSolidarity+settlement.spouseExtra);
   const household=round(net+spouseNet+saving);
-  return {id,rows,spouseRows:spouse.rows,spouseBase:spouse.base,base:b,pit,solidarity,net,household,available:round(household-contribution-spouseContribution),contribution,deduction,spouseContribution,spouseDeduction,spouseTax,spouseNet,spouseSolidarity,jointAllowed,jointTax,saving,
+  return {id,rows,employmentRows,contractRows:employee?result.contractRows:[],spouseRows:spouse.rows,spouseBase:spouse.base,base:b,pit,solidarity,net,household,available:round(household-contribution-spouseContribution),contribution,deduction,spouseContribution,spouseDeduction,spouseTax,spouseNet,spouseSolidarity,jointAllowed,jointTax,saving,
    payrollEligible,payrollApplied,childPotential:ent.potential,childEntitlement:ent,childDeduction:settlement.jointDed,childOwnDeduction:settlement.ownDed,childSpouseDeduction:settlement.spouseDed,childOwnExtra:settlement.ownExtra,childSpouseExtra:settlement.spouseExtra,childJointExtra:settlement.jointExtra,
    ikzeSaving:round(without.jointFinal-without.jointExtra-jointTax+settlement.jointExtra),refund:round(sum(rows,'pit')+sum(spouse.rows,'pit')-jointTax+settlement.jointExtra),ownRefund:round(sum(rows,'pit')-pit+settlement.ownExtra),spouseAdvances:sum(spouse.rows,'pit'),annual: Object.fromEntries(['revenue','cost','social','pension','disability','sickness','accident','fund','health','pit','kup','author','ppk','employerPpk','employerCost','employerSocial','employerPension','employerDisability','employerFund','fgsp','vat','vatOut','vatIn','invoice','net'].map(k=>[k,sum(rows,k)]))};
  });
